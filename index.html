@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:transparent;overflow:hidden}canvas{display:block;touch-action:none;cursor:crosshair;border:1px solid #777;box-sizing:border-box}
+</style></head><body><canvas id="surface"></canvas><script>
+const canvas=document.getElementById('surface');const ctx=canvas.getContext('2d');
+let args={},drawing=false,points=[];
+function send(type,data){window.parent.postMessage(Object.assign({isStreamlitMessage:true,type},data||{}),'*')}
+function render(a){args=a;const w=Number(a.width),h=Number(a.height);canvas.width=w;canvas.height=h;
+ const im=new Image();im.onload=()=>{ctx.clearRect(0,0,w,h);ctx.drawImage(im,0,0,w,h)};im.src='data:image/png;base64,'+a.image;
+ send('streamlit:setFrameHeight',{height:h+4});}
+function pos(e){const r=canvas.getBoundingClientRect();return [Math.max(0,Math.min(canvas.width-1,(e.clientX-r.left)*canvas.width/r.width)),Math.max(0,Math.min(canvas.height-1,(e.clientY-r.top)*canvas.height/r.height))]}
+function paint(x,y){ctx.lineWidth=Number(args.brush);ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=args.color;ctx.lineTo(x,y);ctx.stroke()}
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();drawing=true;canvas.setPointerCapture(e.pointerId);points=[pos(e)];ctx.beginPath();ctx.moveTo(...points[0]);paint(...points[0])});
+canvas.addEventListener('pointermove',e=>{if(!drawing)return;e.preventDefault();const p=pos(e);points.push(p);paint(...p)});
+function finish(e){if(!drawing)return;drawing=false;if(points.length===1){const p=points[0];ctx.beginPath();ctx.arc(p[0],p[1],Number(args.brush)/2,0,Math.PI*2);ctx.fillStyle=args.color;ctx.fill()}
+ send('streamlit:setComponentValue',{value:{points}});points=[]}
+canvas.addEventListener('pointerup',finish);canvas.addEventListener('pointercancel',finish);
+window.addEventListener('message',e=>{if(e.data&&e.data.type==='streamlit:render')render(e.data.args)});
+send('streamlit:componentReady',{apiVersion:1});send('streamlit:setFrameHeight',{height:300});
+</script></body></html>

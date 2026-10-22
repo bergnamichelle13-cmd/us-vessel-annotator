@@ -10,7 +10,9 @@ import cv2
 import numpy as np
 import streamlit as st
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
+import streamlit.components.v1 as components
+
+annotator = components.declare_component("us_annotator_canvas", path=str(Path(__file__).parent / "annotator_component"))
 
 st.set_page_config(page_title="US Vessel Annotator", layout="wide")
 st.title("US Vessel Annotator")
@@ -110,38 +112,47 @@ base = rgb.copy()
 base[mask == 1] = ((1-opacity)*base[mask == 1] + opacity*np.array([0, 230, 170])).astype(np.uint8)
 base[mask == 2] = ((1-opacity)*base[mask == 2] + opacity*np.array([255, 145, 35])).astype(np.uint8)
 background = Image.fromarray(base).resize((display_w, display_h))
-st.image(background, caption="Verifica frame estratto da OpenCV")
 
-st.markdown("**Disegna e premi ‘Applica tratto’.** Cambiare classe dopo aver applicato i tratti. La gomma cancella entrambe le classi.")
-color = {1: "rgba(0,230,170,0.85)", 2: "rgba(255,145,35,0.85)", 0: "rgba(255,255,255,0.85)"}[label]
-canvas = st_canvas(
-    fill_color=color, stroke_width=brush*zoom, stroke_color=color,
-    background_image=background, update_streamlit=True,
-    height=display_h, width=display_w, drawing_mode="freedraw",
-    key=f"canvas_{idx}_{st.session_state.canvas_version}",
+st.markdown("**Disegna direttamente sull’ecografia.** Rilascia il mouse per applicare il tratto. Usa Undo per annullarlo.")
+color = {1: "#00e6aa", 2: "#ff9123", 0: "#ff5555"}[label]
+# The browser component draws on top of the ultrasound and returns only
+# stroke coordinates. Masks remain on the server at original resolution.
+image_b64 = __import__("base64").b64encode(png_bytes(np.asarray(background))).decode("ascii")
+stroke = annotator(
+    image=image_b64, width=display_w, height=display_h,
+    color=color, brush=float(brush * zoom),
+    key=f"canvas_{idx}_{st.session_state.canvas_version}", default=None,
 )
-
-left, mid, right, fourth = st.columns(4)
-with left:
-    apply = st.button("Applica tratto", use_container_width=True)
-with mid:
-    undo = st.button("Undo", use_container_width=True)
-with right:
-    redo = st.button("Redo", use_container_width=True)
-with fourth:
-    clear = st.button("Svuota frame", use_container_width=True)
-
-if apply and canvas.image_data is not None:
-    alpha = np.asarray(canvas.image_data)[:, :, 3]
-    strokes = cv2.resize((alpha > 10).astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST).astype(bool)
-    if np.any(strokes):
+if isinstance(stroke, dict) and stroke.get("points"):
+    points = np.asarray(stroke["points"], dtype=float)
+    if points.ndim == 2 and points.shape[1] == 2 and len(points) <= 20000:
+        edit = np.zeros((h, w), np.uint8)
+        coords = np.rint(points / zoom).astype(int)
+        coords[:, 0] = np.clip(coords[:, 0], 0, w - 1)
+        coords[:, 1] = np.clip(coords[:, 1], 0, h - 1)
+        thickness = max(1, int(round(brush)))
+        if len(coords) == 1:
+            cv2.circle(edit, tuple(coords[0]), max(1, thickness // 2), 255, -1)
+        else:
+            cv2.polylines(edit, [coords.reshape(-1, 1, 2)], False, 255, thickness, lineType=cv2.LINE_8)
+            for xy in (coords[0], coords[-1]):
+                cv2.circle(edit, tuple(xy), max(1, thickness // 2), 255, -1)
         st.session_state.history.setdefault(idx, []).append(mask.copy())
         st.session_state.future[idx] = []
-        new_mask = mask.copy()
-        new_mask[strokes] = label
-        st.session_state.masks[idx] = new_mask
-    st.session_state.canvas_version += 1
-    st.rerun()
+        updated = mask.copy()
+        updated[edit > 0] = label
+        st.session_state.masks[idx] = updated
+        st.session_state.canvas_version += 1
+        st.rerun()
+
+left, mid, right = st.columns(3)
+with left:
+    undo = st.button("Undo", use_container_width=True)
+with mid:
+    redo = st.button("Redo", use_container_width=True)
+with right:
+    clear = st.button("Svuota frame", use_container_width=True)
+
 if undo and st.session_state.history.get(idx):
     st.session_state.future.setdefault(idx, []).append(mask.copy())
     st.session_state.masks[idx] = st.session_state.history[idx].pop()
