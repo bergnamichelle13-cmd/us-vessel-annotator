@@ -21,7 +21,11 @@ COMPONENT = components.declare_component("us_vessel_paint_v9", path=str(Path(__f
 st.markdown("""<style>
 :root {--orange:#ed6730;--coral:#e94a4c;--magenta:#c23b85;--purple:#63538e;--teal:#5baaa5;--ink:#353840}
 .stApp {background:linear-gradient(135deg,#fff9f6 0%,#fdf9fc 52%,#f4fbfa 100%);color:#333841}
-.block-container{max-width:1380px;padding-top:.8rem;padding-bottom:2rem}
+.block-container{
+    max-width:1380px;
+    padding-top:2.5rem;
+    padding-bottom:2rem;
+}
 [data-testid="stSidebar"]{background:#faf6fb}
 [data-testid="stSidebar"] *{color:#413a50}
 h1,h2,h3{color:#40394b}
