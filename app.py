@@ -110,6 +110,7 @@ base = rgb.copy()
 base[mask == 1] = ((1-opacity)*base[mask == 1] + opacity*np.array([0, 230, 170])).astype(np.uint8)
 base[mask == 2] = ((1-opacity)*base[mask == 2] + opacity*np.array([255, 145, 35])).astype(np.uint8)
 background = Image.fromarray(base).resize((display_w, display_h))
+st.image(background, caption="Verifica frame estratto da OpenCV")
 
 st.markdown("**Disegna e premi ‘Applica tratto’.** Cambiare classe dopo aver applicato i tratti. La gomma cancella entrambe le classi.")
 color = {1: "rgba(0,230,170,0.85)", 2: "rgba(255,145,35,0.85)", 0: "rgba(255,255,255,0.85)"}[label]
